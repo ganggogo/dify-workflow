@@ -6,6 +6,7 @@ import {
   RiArrowRightLine,
   RiEditLine,
   RiFlowChart,
+  RiLogoutBoxRLine,
   RiRefreshLine,
   RiSearchLine,
   RiTimeLine,
@@ -13,11 +14,12 @@ import {
 import { useAppList } from '@/service/use-apps'
 import { AppModeEnum } from '@/types/app'
 import { cn } from '@/utils/classnames'
-import { standaloneWorkflowApps } from './mock-data'
 
 type WorkflowManagerProps = {
-  onCreateWorkflow: (payload: CreateWorkflowPayload) => void
+  onCreateWorkflow: (payload: CreateWorkflowPayload) => void | Promise<void>
   onOpenWorkflow: (app: App) => void
+  onEditWorkflowSettings: (app: App, payload: { name: string, description: string }) => void | Promise<void>
+  onLogout: () => void | Promise<void>
 }
 
 export type CreateWorkflowPayload = {
@@ -44,10 +46,10 @@ const text = {
   createAndEdit: '\u521b\u5efa\u5e76\u7f16\u8f91',
   total: '\u5de5\u4f5c\u6d41\u603b\u6570',
   workspace: '\u5f53\u524d\u5de5\u4f5c\u533a',
-  mockStatus: 'Mock \u72b6\u6001',
-  mockConnected: '\u5df2\u8fde\u63a5\u672c\u5730\u63a5\u53e3',
+  backendStatus: '\u540e\u7aef\u72b6\u6001',
+  backendConnected: '\u5df2\u8fde\u63a5\u771f\u5b9e\u63a5\u53e3',
   apps: '\u5de5\u4f5c\u6d41\u5e94\u7528',
-  appsDescription: '\u540e\u7eed\u53ef\u7531\u771f\u5b9e\u540e\u7aef\u8fd4\u56de\u591a\u4e2a\u5de5\u4f5c\u6d41\u5e94\u7528\u3002',
+  appsDescription: '\u5de5\u4f5c\u6d41\u5e94\u7528\u5217\u8868\u6765\u81ea\u540e\u7aef\u63a5\u53e3\u3002',
   search: '\u641c\u7d22\u5de5\u4f5c\u6d41',
   refresh: '\u5237\u65b0',
   noDescription: '\u6682\u65e0\u63cf\u8ff0',
@@ -55,6 +57,7 @@ const text = {
   settings: '\u8bbe\u7f6e',
   edit: '\u7f16\u8f91\u5de5\u4f5c\u6d41',
   empty: '\u6ca1\u6709\u627e\u5230\u5de5\u4f5c\u6d41',
+  logout: '\u9000\u51fa\u767b\u5f55',
 }
 
 const formatTime = (timestamp?: number) => {
@@ -70,15 +73,23 @@ const formatTime = (timestamp?: number) => {
   }).format(timestamp * 1000)
 }
 
-const WorkflowManager = ({ onCreateWorkflow, onOpenWorkflow }: WorkflowManagerProps) => {
+const WorkflowManager = ({ onCreateWorkflow, onOpenWorkflow, onEditWorkflowSettings, onLogout }: WorkflowManagerProps) => {
   const [keyword, setKeyword] = useState('')
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [editingApp, setEditingApp] = useState<App | null>(null)
+  const [isCreating, setIsCreating] = useState(false)
+  const [isSavingSettings, setIsSavingSettings] = useState(false)
   const [createForm, setCreateForm] = useState<CreateWorkflowPayload>({
     name: '',
     description: '',
     note: '',
   })
+  const [settingsForm, setSettingsForm] = useState({
+    name: '',
+    description: '',
+  })
   const [createError, setCreateError] = useState('')
+  const [settingsError, setSettingsError] = useState('')
   const { data, isFetching, refetch } = useAppList({
     page: 1,
     limit: 30,
@@ -87,7 +98,7 @@ const WorkflowManager = ({ onCreateWorkflow, onOpenWorkflow }: WorkflowManagerPr
   })
 
   const apps = useMemo(() => {
-    const list = (data?.data?.length ? data.data : standaloneWorkflowApps) as App[]
+    const list = (data?.data || []) as App[]
     const normalizedKeyword = keyword.trim().toLowerCase()
 
     if (!normalizedKeyword)
@@ -109,7 +120,21 @@ const WorkflowManager = ({ onCreateWorkflow, onOpenWorkflow }: WorkflowManagerPr
     setShowCreateModal(false)
   }
 
-  const submitCreateForm = (event: FormEvent<HTMLFormElement>) => {
+  const openSettings = (app: App) => {
+    setEditingApp(app)
+    setSettingsForm({
+      name: app.name || '',
+      description: app.description || '',
+    })
+    setSettingsError('')
+  }
+
+  const closeSettings = () => {
+    setEditingApp(null)
+    setSettingsError('')
+  }
+
+  const submitCreateForm = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
     const name = createForm.name.trim()
@@ -118,12 +143,49 @@ const WorkflowManager = ({ onCreateWorkflow, onOpenWorkflow }: WorkflowManagerPr
       return
     }
 
-    onCreateWorkflow({
-      name,
-      description: createForm.description.trim(),
-      note: createForm.note.trim(),
-    })
-    resetCreateForm()
+    setIsCreating(true)
+    try {
+      await onCreateWorkflow({
+        name,
+        description: createForm.description.trim(),
+        note: createForm.note.trim(),
+      })
+      resetCreateForm()
+    }
+    catch (error) {
+      setCreateError(error instanceof Error ? error.message : '创建失败')
+    }
+    finally {
+      setIsCreating(false)
+    }
+  }
+
+  const submitSettingsForm = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!editingApp)
+      return
+
+    const name = settingsForm.name.trim()
+    if (!name) {
+      setSettingsError('请输入工作流名称')
+      return
+    }
+
+    setIsSavingSettings(true)
+    try {
+      await onEditWorkflowSettings(editingApp, {
+        name,
+        description: settingsForm.description.trim(),
+      })
+      await refetch()
+      closeSettings()
+    }
+    catch (error) {
+      setSettingsError(error instanceof Error ? error.message : '保存失败')
+    }
+    finally {
+      setIsSavingSettings(false)
+    }
   }
 
   return (
@@ -141,14 +203,24 @@ const WorkflowManager = ({ onCreateWorkflow, onOpenWorkflow }: WorkflowManagerPr
               </div>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowCreateModal(true)}
-            className="inline-flex h-9 items-center gap-2 rounded-lg bg-components-button-primary-bg px-3 text-components-button-primary-text system-sm-medium hover:bg-components-button-primary-bg-hover"
-          >
-            <RiAddLine className="h-4 w-4" />
-            {text.create}
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={onLogout}
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-components-button-secondary-border bg-components-button-secondary-bg px-3 text-components-button-secondary-text system-sm-medium hover:bg-components-button-secondary-bg-hover"
+            >
+              <RiLogoutBoxRLine className="h-4 w-4" />
+              {text.logout}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowCreateModal(true)}
+              className="inline-flex h-9 items-center gap-2 rounded-lg bg-components-button-primary-bg px-3 text-components-button-primary-text system-sm-medium hover:bg-components-button-primary-bg-hover"
+            >
+              <RiAddLine className="h-4 w-4" />
+              {text.create}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -164,8 +236,8 @@ const WorkflowManager = ({ onCreateWorkflow, onOpenWorkflow }: WorkflowManagerPr
               <p className="title-md-semi-bold mt-2 truncate text-text-primary">Local Workspace</p>
             </div>
             <div className="rounded-lg border border-components-panel-border bg-components-panel-bg p-4 shadow-xs">
-              <p className="system-xs-medium text-text-tertiary">{text.mockStatus}</p>
-              <p className="title-md-semi-bold mt-2 text-text-success">{text.mockConnected}</p>
+              <p className="system-xs-medium text-text-tertiary">{text.backendStatus}</p>
+              <p className="title-md-semi-bold mt-2 text-text-success">{text.backendConnected}</p>
             </div>
           </section>
 
@@ -226,6 +298,7 @@ const WorkflowManager = ({ onCreateWorkflow, onOpenWorkflow }: WorkflowManagerPr
                   <div className="flex shrink-0 items-center gap-2">
                     <button
                       type="button"
+                      onClick={() => openSettings(app)}
                       className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-components-button-secondary-border bg-components-button-secondary-bg px-3 text-components-button-secondary-text system-sm-medium hover:bg-components-button-secondary-bg-hover"
                     >
                       <RiEditLine className="h-4 w-4" />
@@ -307,9 +380,61 @@ const WorkflowManager = ({ onCreateWorkflow, onOpenWorkflow }: WorkflowManagerPr
               </button>
               <button
                 type="submit"
+                disabled={isCreating}
                 className="inline-flex h-9 items-center rounded-lg bg-components-button-primary-bg px-3 text-components-button-primary-text system-sm-medium hover:bg-components-button-primary-bg-hover"
               >
-                {text.createAndEdit}
+                {isCreating ? '创建中...' : text.createAndEdit}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {editingApp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <form
+            onSubmit={submitSettingsForm}
+            className="w-full max-w-[520px] rounded-lg border border-components-panel-border bg-components-panel-bg shadow-xl"
+          >
+            <div className="border-b border-divider-subtle px-5 py-4">
+              <h2 className="title-lg-semi-bold text-text-primary">工作流设置</h2>
+              <p className="system-sm-regular mt-1 text-text-tertiary">修改名称和简介后保存。</p>
+            </div>
+            <div className="flex flex-col gap-4 px-5 py-4">
+              <label className="flex flex-col gap-1.5">
+                <span className="system-sm-medium text-text-secondary">{text.name}</span>
+                <input
+                  autoFocus
+                  value={settingsForm.name}
+                  onChange={event => setSettingsForm(form => ({ ...form, name: event.target.value }))}
+                  className="h-10 rounded-lg border border-components-input-border bg-components-input-bg px-3 text-text-primary outline-none system-sm-regular placeholder:text-text-quaternary focus:border-components-input-border-active"
+                />
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="system-sm-medium text-text-secondary">{text.intro}</span>
+                <textarea
+                  value={settingsForm.description}
+                  onChange={event => setSettingsForm(form => ({ ...form, description: event.target.value }))}
+                  rows={3}
+                  className="resize-none rounded-lg border border-components-input-border bg-components-input-bg px-3 py-2 text-text-primary outline-none system-sm-regular placeholder:text-text-quaternary focus:border-components-input-border-active"
+                />
+                {settingsError && <span className="system-xs-regular text-text-destructive">{settingsError}</span>}
+              </label>
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-divider-subtle px-5 py-4">
+              <button
+                type="button"
+                onClick={closeSettings}
+                className="inline-flex h-9 items-center rounded-lg border border-components-button-secondary-border bg-components-button-secondary-bg px-3 text-components-button-secondary-text system-sm-medium hover:bg-components-button-secondary-bg-hover"
+              >
+                {text.cancel}
+              </button>
+              <button
+                type="submit"
+                disabled={isSavingSettings}
+                className="inline-flex h-9 items-center rounded-lg bg-components-button-primary-bg px-3 text-components-button-primary-text system-sm-medium hover:bg-components-button-primary-bg-hover"
+              >
+                {isSavingSettings ? '保存中...' : '保存'}
               </button>
             </div>
           </form>

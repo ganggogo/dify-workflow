@@ -1,22 +1,17 @@
 import type { PropsWithChildren } from 'react'
 import type { AppContextValue } from '@/context/app-context'
+import type { ICurrentWorkspace, UserProfileResponse } from '@/models/common'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useEventEmitter } from 'ahooks'
 import { useEffect, useMemo, useState } from 'react'
 import { I18nextProvider } from 'react-i18next'
-import { useStore as useAppStore } from '@/app/components/app/store'
-import { AppContext, initialLangGeniusVersionInfo } from '@/context/app-context'
+import { ToastHost } from '@/app/components/base/ui/toast'
+import { AppContext, initialLangGeniusVersionInfo, initialWorkspaceInfo, userProfilePlaceholder } from '@/context/app-context'
 import { EventEmitterContext } from '@/context/event-emitter'
 import { baseProviderContextValue, ProviderContext } from '@/context/provider-context'
 import { createI18nextInstance } from '@/i18n-config/client'
 import { namespaces, namespacesInFileName } from '@/i18n-config/resources'
-import {
-  standaloneAppDetail,
-  standaloneUserProfile,
-  standaloneWorkspace,
-} from './mock-data'
-
-useAppStore.setState({ appDetail: standaloneAppDetail as any })
+import { getMe, getWorkspaceProfile } from './api'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -51,39 +46,57 @@ const resources = {
 
 const StandaloneProviders = ({ children }: PropsWithChildren) => {
   const [i18n] = useState(() => createI18nextInstance('zh-Hans', resources))
+  const [userProfile, setUserProfile] = useState<UserProfileResponse>(userProfilePlaceholder as UserProfileResponse)
+  const [currentWorkspace, setCurrentWorkspace] = useState<ICurrentWorkspace>(initialWorkspaceInfo)
   const eventEmitter = useEventEmitter()
-  const setAppDetail = useAppStore(s => s.setAppDetail)
   const appContextValue = useMemo<AppContextValue>(() => ({
-    userProfile: standaloneUserProfile as any,
-    currentWorkspace: standaloneWorkspace as any,
-    isCurrentWorkspaceManager: true,
-    isCurrentWorkspaceOwner: true,
-    isCurrentWorkspaceEditor: true,
-    isCurrentWorkspaceDatasetOperator: true,
+    userProfile,
+    currentWorkspace,
+    isCurrentWorkspaceManager: (currentWorkspace?.role === 'owner' || currentWorkspace?.role === 'admin') || false,
+    isCurrentWorkspaceOwner: currentWorkspace?.role === 'owner' || false,
+    isCurrentWorkspaceEditor: ['owner', 'admin', 'editor'].includes(currentWorkspace?.role || ''),
+    isCurrentWorkspaceDatasetOperator: ['owner', 'admin', 'editor', 'dataset_operator'].includes(currentWorkspace?.role || ''),
     mutateUserProfile: () => {},
     mutateCurrentWorkspace: () => {},
     langGeniusVersionInfo: initialLangGeniusVersionInfo,
     useSelector: selector => selector({
-      userProfile: standaloneUserProfile as any,
-      currentWorkspace: standaloneWorkspace as any,
-      isCurrentWorkspaceManager: true,
-      isCurrentWorkspaceOwner: true,
-      isCurrentWorkspaceEditor: true,
-      isCurrentWorkspaceDatasetOperator: true,
+      userProfile,
+      currentWorkspace,
+      isCurrentWorkspaceManager: (currentWorkspace?.role === 'owner' || currentWorkspace?.role === 'admin') || false,
+      isCurrentWorkspaceOwner: currentWorkspace?.role === 'owner' || false,
+      isCurrentWorkspaceEditor: ['owner', 'admin', 'editor'].includes(currentWorkspace?.role || ''),
+      isCurrentWorkspaceDatasetOperator: ['owner', 'admin', 'editor', 'dataset_operator'].includes(currentWorkspace?.role || ''),
       mutateUserProfile: () => {},
       mutateCurrentWorkspace: () => {},
       langGeniusVersionInfo: initialLangGeniusVersionInfo,
       useSelector: (() => undefined) as any,
-      isLoadingCurrentWorkspace: false,
-      isValidatingCurrentWorkspace: false,
+      isLoadingCurrentWorkspace: !currentWorkspace,
+      isValidatingCurrentWorkspace: !currentWorkspace,
     }),
-    isLoadingCurrentWorkspace: false,
-    isValidatingCurrentWorkspace: false,
-  }), [])
+    isLoadingCurrentWorkspace: !currentWorkspace,
+    isValidatingCurrentWorkspace: !currentWorkspace,
+  }), [currentWorkspace, userProfile])
 
   useEffect(() => {
-    setAppDetail(standaloneAppDetail as any)
-  }, [setAppDetail])
+    Promise.all([getMe(), getWorkspaceProfile()])
+      .then(([me, workspace]) => {
+        setUserProfile({
+          id: me.account.id,
+          name: me.account.name,
+          email: me.account.email,
+          avatar: '',
+          avatar_url: null,
+          is_password_set: true,
+        })
+        setCurrentWorkspace({
+          ...initialWorkspaceInfo,
+          ...workspace,
+          role: workspace.role || 'owner',
+          providers: workspace.providers || [],
+        })
+      })
+      .catch(() => {})
+  }, [])
 
   return (
     <I18nextProvider i18n={i18n}>
@@ -92,6 +105,7 @@ const StandaloneProviders = ({ children }: PropsWithChildren) => {
           <ProviderContext.Provider value={{ ...baseProviderContextValue, isFetchedPlan: true, isAPIKeySet: true }}>
             <EventEmitterContext.Provider value={{ eventEmitter }}>
               {children}
+              <ToastHost timeout={5000} limit={3} />
             </EventEmitterContext.Provider>
           </ProviderContext.Provider>
         </AppContext.Provider>

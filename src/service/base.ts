@@ -6,7 +6,6 @@ import type {
   DataSourceNodeErrorResponse,
   DataSourceNodeProcessingResponse,
 } from '@/types/pipeline'
-import { ModelTypeEnum } from '@/app/components/header/account-setting/model-provider-page/declarations'
 import type {
   AgentLogResponse,
   HumanInputFormFilledResponse,
@@ -31,7 +30,6 @@ import type {
 import Cookies from 'js-cookie'
 import { toast } from '@/app/components/base/ui/toast'
 import { API_PREFIX, CSRF_COOKIE_NAME, CSRF_HEADER_NAME, IS_CE_EDITION, PASSPORT_HEADER_NAME, PUBLIC_API_PREFIX, WEB_APP_SHARE_CODE_HEADER_NAME } from '@/config'
-import { defaultSystemFeatures } from '@/types/feature'
 import { asyncRunSafe } from '@/utils'
 import { basePath } from '@/utils/var'
 import { base, ContentType, getBaseOptions } from './fetch'
@@ -393,59 +391,7 @@ export const handleStream = (
   read()
 }
 
-const isStandaloneMockURL = (url: string) => {
-  return [
-    '/system-features',
-    '/workspaces/current/default-model',
-    '/workspaces/current/agent-providers',
-    '/workspaces/current/triggers',
-  ].some(path => url.includes(path))
-    || url.includes('/workspaces/current/models/model-types/')
-}
-
-const getStandaloneMockResponse = <T,>(url: string, otherOptions: IOtherOptions): T | undefined => {
-  if (!isStandaloneMockURL(url))
-    return undefined
-
-  let payload: unknown = []
-
-  if (url.includes('/system-features')) {
-    payload = defaultSystemFeatures
-  }
-  else if (url.includes('/workspaces/current/default-model')) {
-    payload = {
-      data: {
-        model: '',
-        model_type: ModelTypeEnum.textGeneration,
-        provider: {
-          provider: '',
-          icon_small: {
-            en_US: '',
-            zh_Hans: '',
-          },
-        },
-      },
-    }
-  }
-  else if (url.includes('/workspaces/current/models/model-types/')) {
-    payload = { data: [] }
-  }
-
-  if (otherOptions.fetchCompat) {
-    return new Response(JSON.stringify(payload), {
-      status: 200,
-      headers: { 'Content-Type': ContentType.json },
-    }) as T
-  }
-
-  return payload as T
-}
-
 const baseFetch = async <T,>(url: string, options: FetchOptionType = {}, otherOptions: IOtherOptions = {}) => {
-  const standaloneMockResponse = getStandaloneMockResponse<T>(url, otherOptions)
-  if (standaloneMockResponse !== undefined)
-    return standaloneMockResponse
-
   return base<T>(url, options, otherOptions)
 }
 

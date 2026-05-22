@@ -98,6 +98,7 @@ import {
   ControlMode,
   WorkflowRunningStatus,
 } from './types'
+import { isEventTargetInputArea } from './utils'
 import { setupScrollToNodeListener } from './utils/node-navigation'
 import { WorkflowHistoryProvider } from './workflow-history-store'
 import 'reactflow/dist/style.css'
@@ -269,6 +270,8 @@ export const Workflow: FC<WorkflowProps> = memo(({
   }, [handleSyncWorkflowDraftWhenPageClose, handleBeforeUnload])
 
   useEventListener('keydown', (e) => {
+    if (isEventTargetInputArea(e.target as HTMLElement))
+      return
     if ((e.key === 'd' || e.key === 'D') && (e.ctrlKey || e.metaKey))
       e.preventDefault()
     if ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey))
@@ -458,6 +461,7 @@ export const Workflow: FC<WorkflowProps> = memo(({
         edgesFocusable={!nodesReadOnly}
         panOnScroll={controlMode === ControlMode.Pointer && !workflowReadOnly}
         panOnDrag={controlMode === ControlMode.Hand || [1]}
+        panActivationKeyCode={null}
         zoomOnPinch={true}
         zoomOnScroll={true}
         zoomOnDoubleClick={true}

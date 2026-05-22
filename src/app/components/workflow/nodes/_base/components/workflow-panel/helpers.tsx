@@ -49,7 +49,10 @@ export const getCurrentToolCollection = (
   providerId?: string,
 ) => {
   const candidates = buildInTools ?? storeBuildInTools
-  return candidates?.find(item => canFindTool(item.id, providerId))
+  if (!Array.isArray(candidates))
+    return undefined
+
+  return candidates.find(item => canFindTool(item.id, providerId))
 }
 
 export const getCurrentDataSource = (

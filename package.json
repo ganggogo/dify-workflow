@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node server/dev-full.mjs",
+    "dev": "vite --host 127.0.0.1",
     "frontend": "vite --host 127.0.0.1",
-    "backend": "node server/mock-workflow-server.mjs",
+    "backend": "python E:/dify-workflow-server/run.py",
     "build": "vite build",
     "type-check": "tsc --noEmit"
   },

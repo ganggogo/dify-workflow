@@ -106,6 +106,7 @@ const CodeEditor: FC<Props> = ({
   const handleEditorDidMount = (editor: any, monaco: any) => {
     editorRef.current = editor
     resizeEditorToContent()
+    editor.focus()
 
     editor.onDidFocusEditorText(() => {
       setIsFocus(true)
@@ -151,11 +152,35 @@ const CodeEditor: FC<Props> = ({
         // https://microsoft.github.io/monaco-editor/typedoc/interfaces/editor.IEditorOptions.html
         options={{
           readOnly,
-          domReadOnly: true,
-          quickSuggestions: false,
+          domReadOnly: !!readOnly,
+          automaticLayout: true,
+          quickSuggestions: true,
+          suggestOnTriggerCharacters: true,
+          acceptSuggestionOnEnter: 'on',
+          tabCompletion: 'on',
+          wordBasedSuggestions: 'currentDocument',
           minimap: { enabled: false },
           lineNumbersMinChars: 1, // would change line num width
           wordWrap: 'on', // auto line wrap
+          tabSize: 2,
+          insertSpaces: true,
+          detectIndentation: true,
+          formatOnPaste: true,
+          formatOnType: true,
+          autoIndent: 'advanced',
+          bracketPairColorization: { enabled: true },
+          guides: {
+            bracketPairs: true,
+            indentation: true,
+          },
+          cursorBlinking: 'smooth',
+          cursorSmoothCaretAnimation: 'on',
+          contextmenu: true,
+          folding: true,
+          links: true,
+          mouseWheelZoom: true,
+          scrollBeyondLastLine: false,
+          renderWhitespace: 'selection',
           // lineNumbers: (num) => {
           //   return <div>{num}</div>
           // }
